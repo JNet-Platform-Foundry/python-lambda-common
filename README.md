@@ -17,7 +17,7 @@ pip install lambda_app_common
 Services that ship only their own source tree (dependencies come from Lambda layers) vendor the repository instead:
 
 ```
-git subtree add --prefix=src/platform_common https://github.com/jnet-platform-factory/python-lambda-common.git main --squash
+git subtree add --prefix=src/platform_common https://github.com/JNet-Platform-Foundry/python-lambda-common.git main --squash
 ```
 
 and import it as `src.platform_common.lambda_app_common`. Every import inside the package is relative so both layouts work; CI checks the vendored one.

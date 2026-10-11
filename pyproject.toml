@@ -27,8 +27,8 @@ dependencies = [
 test = ["pytest>=8"]
 
 [project.urls]
-"Homepage" = "https://github.com/jnet-platform-factory/python-lambda-common"
-"Bug Tracker" = "https://github.com/jnet-platform-factory/python-lambda-common/issues"
+"Homepage" = "https://github.com/JNet-Platform-Foundry/python-lambda-common"
+"Bug Tracker" = "https://github.com/JNet-Platform-Foundry/python-lambda-common/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["lambda_app_common"]
