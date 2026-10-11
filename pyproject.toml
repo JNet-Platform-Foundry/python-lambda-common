@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lambda_app_common"
-version = "2.0.0"
+version = "2.1.0"
 description = "Middleware for AWS Lambda services on Powertools: an API Gateway handler chain, an EventBridge/SQS/SES event middleware, and bounded telemetry."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -6,4 +6,4 @@ relative. Nothing here names an account or a domain: anything deployment-specifi
 is handed in through :func:`lambda_app_common.config.configure`.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
