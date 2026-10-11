@@ -31,7 +31,7 @@ jobs:
       - name: Summary
         if: always()
         continue-on-error: true
-        uses: jnet-platform-factory/.github/actions/job-summary@v0.0.1
+        uses: JNet-Platform-Foundry/.github/actions/job-summary@v0.0.1
         with:
           title: pytest — Python ${{ matrix.python-version }}
           status: ${{ job.status }}
@@ -69,7 +69,7 @@ jobs:
       - name: Summary
         if: always()
         continue-on-error: true
-        uses: jnet-platform-factory/.github/actions/job-summary@v0.0.1
+        uses: JNet-Platform-Foundry/.github/actions/job-summary@v0.0.1
         with:
           title: Imports cleanly when vendored
           status: ${{ job.status }}
