@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
+test = ["pytest>=8", "boto3"]  # boto3: the key ring tests stub Secrets Manager and SSM
 
 [project.urls]
 "Homepage" = "https://github.com/JNet-Platform-Foundry/python-lambda-common"

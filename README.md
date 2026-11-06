@@ -78,14 +78,29 @@ def proxy_handler(event, context):
     return app.resolve(event, context)
 ```
 
-| Middleware                                  | Does                                                                                                                                                                                                                        |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `print_request_info`                        | One summary line per request; the redacted, truncated request under `DEBUG=1`.                                                                                                                                              |
-| `api_error_handler_for(source)`             | `ServiceError`s keep their status; `ValueError`/`TypeError`/`KeyError`/`AttributeError`/`IntegrityError` → 400; anything else → 500. Each failure is published on the first `event_bus` found in `app.context['services']`. |
-| `inject_organization_user_context`          | Cognito authorizer claims, else `Authorization: Bearer` (RS256 verified against the pool's JWKS, HS256 against the secret), `ApiKey`, `X-Webhook-Token`, `x-api-key`; none, invalid or expired → 401. Sets `app.context['organization_user_context']`.                                |
-| `legacy_user_context(bearer_identity=...)`  | The old handler's identity rules, for endpoints whose callers depend on them. See its docstring for the four differences.                                                                                                   |
-| `inject_services({...}, logger=, metrics=)` | Sets `service.context` (the caller as a dict), adds the services to `app.context['services']`, appends logger keys, records `api_request`.                                                                                  |
-| `response_data`                             | Logs the response status and size; the body under `DEBUG=1`.                                                                                                                                                                |
+| Middleware                                  | Does                                                                                                                                                                                                                                                                              |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `print_request_info`                        | One summary line per request; the redacted, truncated request under `DEBUG=1`.                                                                                                                                                                                                    |
+| `api_error_handler_for(source)`             | `ServiceError`s keep their status; `ValueError`/`TypeError`/`KeyError`/`AttributeError`/`IntegrityError` → 400; anything else → 500. Each failure is published on the first `event_bus` found in `app.context['services']`.                                                       |
+| `inject_organization_user_context`          | Cognito authorizer claims, else `Authorization: Bearer` (RS256 verified against the pool's JWKS, HS256 against the secret or the key ring, see below), `ApiKey`, `X-Webhook-Token`, `x-api-key`; none, invalid or expired → 401. Sets `app.context['organization_user_context']`. |
+| `legacy_user_context(bearer_identity=...)`  | The old handler's identity rules, for endpoints whose callers depend on them. See its docstring for the four differences.                                                                                                                                                         |
+| `inject_services({...}, logger=, metrics=)` | Sets `service.context` (the caller as a dict), adds the services to `app.context['services']`, appends logger keys, records `api_request`.                                                                                                                                        |
+| `response_data`                             | Logs the response status and size; the body under `DEBUG=1`.                                                                                                                                                                                                                      |
+
+### HS256 service tokens and the key ring
+
+An HS256 token is verified the same way on `Authorization: Bearer` and on `X-Webhook-Token` (`http/jwt_keyring.py`):
+
+- **No `kid` header** (legacy): verified against `jwt_secret`, exactly as before, and logged as `auth_type=legacy_jwt organization=… username=…` so the callers still on it can be found.
+- **A `kid` header**: verified against that key from the Secrets Manager key ring, must carry `exp` and `jti`, and is refused if its `jti` is revoked. Logged as `auth_type=jwt_v2 kid=… organization=…`. Both kinds give the same identity.
+
+| Env                      | Meaning                                                                                                                                                                                                              | Unset                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `JWT_SIGNING_SECRET_ARN` | Secrets Manager secret whose SecretString is `{"keys": [{"kid": "<stage>-<yyyymm>", "key": "<64 random bytes, base64url, no padding>"}]}`. Cached 5 minutes; an unknown `kid` refreshes it at most every 30 seconds. | Every `kid` token is a 401. Legacy is unaffected. |
+| `JWT_REVOKED_PARAM`      | SSM String parameter holding a JSON array of revoked `jti`s. Cached 60 seconds.                                                                                                                                      | No revocation check.                              |
+| `JWT_LEGACY_ACCEPTED`    | `"false"` makes every legacy token a 401. The cutover switch.                                                                                                                                                        | Same as `"true"`.                                 |
+
+A ring or list that cannot be read or parsed is a 503 for `kid` tokens only, and is not cached; legacy and Cognito tokens never read either. The function role needs `secretsmanager:GetSecretValue` on the secret and `ssm:GetParameter` on the parameter. boto3 is imported only when a `kid` token arrives: the Lambda runtime provides it, and elsewhere you install it yourself.
 
 ## Events
 
