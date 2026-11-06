@@ -41,6 +41,7 @@ from .. import telemetry
 from ..config import get_config, run_invocation_start_hooks
 from ..models import OrganizationUserContext
 from ..redaction import redact_event, redact_headers
+from . import jwt_keyring
 
 try:  # SQLAlchemy is optional: only services with a database raise its errors.
     from sqlalchemy.exc import IntegrityError
@@ -365,7 +366,10 @@ def _decode_jwt_token(token: str) -> tuple:
     - RS256: a Cognito token, verified against the configured user pool's JWKS, with `iss`
       and `token_use` checked. Claims are trusted unverified only when API Gateway's
       authorizer supplied them, which never reaches this function.
-    - HS256: an internal service token, verified against the configured JWT secret.
+    - HS256: an internal service token. With a `kid` header it is verified against that key
+      in the Secrets Manager key ring and checked against the revocation list; without one it
+      is a legacy token, verified against the configured JWT secret while
+      JWT_LEGACY_ACCEPTED allows it. See `jwt_keyring` (JNET-3017).
 
     The header only picks which verifier runs; each is pinned to its own algorithm and key.
     A missing, "none" or other alg is a 401, as is a bad signature or an expired token.
@@ -380,7 +384,7 @@ def _decode_jwt_token(token: str) -> tuple:
         if alg == "RS256":
             return _decode_cognito_token(token, header), alg
         if alg == "HS256":
-            return jwt.decode(token, get_config().resolved_jwt_secret(), algorithms=["HS256"]), alg
+            return jwt_keyring.decode_hs256_token(token, header, get_config().resolved_jwt_secret()), alg
     except jwt.ExpiredSignatureError:
         raise UnauthorizedError("Token has expired.")
     except jwt.InvalidTokenError:

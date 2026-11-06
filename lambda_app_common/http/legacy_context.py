@@ -7,7 +7,9 @@ switching rules would lock existing callers out. It differs from the standard in
 all deliberate, all inherited:
 
 - `X-Webhook-Token` is an HS256 JWT whose groups are read from `user_groups` (default
-  `["Member"]`) and applications from `user_applications`.
+  `["Member"]`) and applications from `user_applications`. It is verified like any HS256
+  token: against the key ring when it carries a `kid`, else against the configured secret
+  (see `jwt_keyring`).
 - An `Authorization: Bearer ...` with no authorizer context is NOT verified. The request
   gets the fixed `bearer_identity` the service configures, or a 401 if it configures none.
 - With Cognito claims, the email is read from `cognito:email` and a missing organization
@@ -32,6 +34,7 @@ from aws_lambda_powertools.event_handler.middlewares import NextMiddleware
 from ..config import get_config
 from ..models import OrganizationUserContext
 from ..redaction import redact_headers, redact_mapping, token_fingerprint
+from . import jwt_keyring
 from .middlewares import attach_feature_flags, normalize_to_list, start_invocation
 
 
@@ -84,7 +87,11 @@ def resolve_legacy_user_context(event: Mapping, bearer_identity: Optional[Mappin
     if not authorizer:
         if webhook_token is not None:
             try:
-                decoded = jwt.decode(webhook_token, config.resolved_jwt_secret(), algorithms=["HS256"])
+                header = jwt.get_unverified_header(webhook_token)
+                if header.get("alg") != "HS256":
+                    ## Was refused by `algorithms=["HS256"]` with this message; keep it.
+                    raise UnauthorizedError("Invalid webhook token.")
+                decoded = jwt_keyring.decode_hs256_token(webhook_token, header, config.resolved_jwt_secret())
             except jwt.ExpiredSignatureError:
                 raise UnauthorizedError("Webhook token has expired.")
             except jwt.InvalidTokenError:
