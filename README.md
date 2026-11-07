@@ -4,7 +4,8 @@ Middleware for AWS Lambda services built on [Powertools for AWS Lambda (Python)]
 
 - an **API Gateway handler chain** for `APIGatewayRestResolver` — request logging with credentials redacted, error handling that publishes failures as events, identity resolution, dependency injection, response logging;
 - an **event middleware** for EventBridge, SQS and SES entry points;
-- **bounded telemetry**: logger keys that cannot grow with the event, an `api_request` metric whose metadata cannot break the EMF flush.
+- **bounded telemetry**: logger keys that cannot grow with the event, an `api_request` metric whose metadata cannot break the EMF flush;
+- **safe ZIP extraction** for uploads: limits against ZIP bombs, no zip slip, only the file types you allow.
 
 It replaces the "handler object" pattern, where every Lambda built one god-object at import time that dispatched on event shape and did all of the above in one place.
 
@@ -117,6 +118,20 @@ def handler(event, context):
 ```
 
 Put it inside the logger decorator and outside any `event_source` or batch decorator, so it sees the raw event. It runs the start hooks, classifies the event, prints one summary line, appends logger keys (an EventBridge `detail` larger than `DETAIL_LOG_MAX_CHARS` is replaced by its shape), and records `api_request` when given `metrics`.
+
+## Uploaded ZIPs
+
+```python
+import zipfile
+from lambda_app_common.archives import extract_zip, read_zip
+
+with zipfile.ZipFile(path) as archive:
+    extraction = extract_zip(archive, "/tmp/out", allowed_extensions=["pdf", "xml"])   # instead of extractall
+    extraction.paths        # what was written, folders kept
+    extraction.skipped      # [(name, reason)], also printed by name, never by content
+```
+
+`scan_zip` decides from the central directory alone, before anything is written. It raises `UnsafeArchiveError` (a `ValueError`, so the API chain answers 400) for more than 2000 entries, a wanted file over 50 MiB uncompressed, wanted files adding up to over 200 MiB, a file over 1 MiB that compresses better than 100:1, or any name that is absolute or climbs out with `..`. It skips nested archives, private keys and certificates (`.key`, `.cer`, `.pfx`, `.p12`, `.pem`, …) whatever the allow-list says, encrypted entries, symlinks, and anything outside `allowed_extensions` when one is given. Pass `ArchiveLimits(...)` to change a limit. `read_zip` is the in-memory version.
 
 ## Upgrading from 1.x
 
